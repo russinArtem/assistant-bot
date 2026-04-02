@@ -5,10 +5,8 @@ import sys
 import time
 
 from dotenv import load_dotenv
-import requests
 from telebot import TeleBot
-
-from exceptions import (APIDataError, APIRequestError)
+import requests
 
 
 load_dotenv()
@@ -29,48 +27,43 @@ HOMEWORK_VERDICTS = {
 
 OK = HTTPStatus.OK
 
-MISSING_TOKENS_MSG = (
+MISSING_TOKENS = (
     'Отсутствуют обязательные переменные окружения: {missing_tokens}. '
     'Программа принудительно остановлена.'
 )
-SUCCESS_MESSAGE_MSG = 'Бот отправил сообщение: {message}'
-ERROR_SUCCESS_MESSAGE_MSG = (
+SUCCESS_MESSAGE = 'Бот отправил сообщение: {message}'
+ERROR_SUCCESS_MESSAGE = (
     'Ошибка при отправке сообщения "{message}": {error}'
 )
-API_ERROR_COMMON_MSG = (
+API_ERROR_COMMON = (
     'URL: {endpoint}. '
     'Заголовки: {headers}. '
     'Параметры запроса: {params}.'
 )
-API_REQUEST_ERROR_MSG = (
-    'Ошибка при запросе к API. {error}. ' + API_ERROR_COMMON_MSG
+API_REQUEST_ERROR = 'Ошибка при запросе к API. {error}. {api_error_common}'
+API_STATUS_ERROR = (
+    'Ошибка при запросе к API: {status_code}. {api_error_common}'
 )
-API_STATUS_ERROR_MSG = (
-    'Ошибка при запросе к API: {status_code}. ' + API_ERROR_COMMON_MSG
-)
-API_DATA_ERROR_MSG = (
-    'Ошибка в ответе API. Код ошибки: {code}. Сообщение: {error_msg}. '
-    + API_ERROR_COMMON_MSG
-)
-TYPE_ERROR_RESPONSE_NOT_DICT_MSG = (
+API_DATA_ERROR = 'Ошибка в ответе API. {key}: {error}. {api_error_common}'
+TYPE_ERROR_RESPONSE_NOT_DICT = (
     'Ответ API не является словарем, получен тип {type_response}'
 )
-KEY_ERROR_HOMEWORKS_MISSING_MSG = 'В ответе API отсутствует ключ "homeworks".'
-TYPE_ERROR_HOMEWORKS_NOT_LIST_MSG = (
+KEY_ERROR_HOMEWORKS_MISSING = 'В ответе API отсутствует ключ "homeworks".'
+TYPE_ERROR_HOMEWORKS_NOT_LIST = (
     'Значение ключа "homeworks" в ответе API не является списком, '
     'получен тип {type_homeworks}'
 )
-KEY_ERROR_DATA_HOMEWORK_MISSING_MSG = (
+KEY_ERROR_DATA_HOMEWORK_MISSING = (
     'Для работы с данными домашней работы отсутствует ключ {key}'
 )
-VALUE_ERROR_UNKNOWN_STATUS_MSG = (
+VALUE_ERROR_UNKNOWN_STATUS = (
     'Неизвестный статус домашней работы: "{status}"'
 )
-STATUS_CHANGED_HOMEWORK_MSG = (
+STATUS_CHANGED_HOMEWORK = (
     'Изменился статус проверки работы "{homework_name}". {verdict}'
 )
-NO_NEW_STATUSES_MSG = 'В ответе API отсутствуют новые статусы.'
-PROGRAM_FAILURE_MSG = 'Сбой в работе программы: {error}'
+NO_NEW_STATUSES = 'В ответе API отсутствуют новые статусы.'
+PROGRAM_FAILURE = 'Сбой в работе программы: {error}'
 
 
 logger = logging.getLogger(__name__)
@@ -84,11 +77,9 @@ def check_tokens():
     """
     missing_tokens = [name for name in NAME_TOKENS if not globals()[name]]
     if missing_tokens:
-        logger.critical(
-            MISSING_TOKENS_MSG.format(missing_tokens=', '.join(missing_tokens))
-        )
-        return False
-    return True
+        error_message = MISSING_TOKENS.format(missing_tokens=missing_tokens)
+        logger.critical(error_message)
+        raise ValueError(error_message)
 
 
 def send_message(bot, message):
@@ -99,11 +90,11 @@ def send_message(bot, message):
     """
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug(SUCCESS_MESSAGE_MSG.format(message=message))
+        logger.debug(SUCCESS_MESSAGE.format(message=message))
         return True
     except Exception as error:
         logger.error(
-            ERROR_SUCCESS_MESSAGE_MSG.format(message=message, error=error),
+            ERROR_SUCCESS_MESSAGE.format(message=message, error=error),
             exc_info=True
         )
         return False
@@ -116,6 +107,9 @@ def get_api_answer(timestamp):
     приведя его из формата JSON к типам данных Python.
     """
     params = {'from_date': timestamp}
+    api_error_common = API_ERROR_COMMON.format(
+        endpoint=ENDPOINT, headers=HEADERS, params=params
+    )
     try:
         response = requests.get(
             ENDPOINT,
@@ -123,26 +117,22 @@ def get_api_answer(timestamp):
             params=params
         )
     except requests.RequestException as error:
-        raise APIRequestError(API_REQUEST_ERROR_MSG.format(
-            error=error, endpoint=ENDPOINT, headers=HEADERS, params=params
+        raise ConnectionError(API_REQUEST_ERROR.format(
+            error=error, api_error_common=api_error_common
         ))
     status_code = response.status_code
     if status_code != OK:
-        raise APIRequestError(API_STATUS_ERROR_MSG.format(
-            status_code=status_code,
-            endpoint=ENDPOINT,
-            headers=HEADERS,
-            params=params
+        raise requests.HTTPError(API_STATUS_ERROR.format(
+            status_code=status_code, api_error_common=api_error_common
         ))
     data = response.json()
-    if 'code' in data or 'error' in data:
-        raise APIDataError(API_DATA_ERROR_MSG.format(
-            code=data.get('code', 'не указан'),
-            error_msg=data.get('error', 'не указано'),
-            endpoint=ENDPOINT,
-            headers=HEADERS,
-            params=params
-        ))
+    for key in ['code', 'error']:
+        if key in data:
+            raise ValueError(API_DATA_ERROR.format(
+                key=key,
+                error=data[key],
+                api_error_common=api_error_common
+            ))
     return data
 
 
@@ -153,14 +143,14 @@ def check_response(response):
     к типам данных Python.
     """
     if not isinstance(response, dict):
-        raise TypeError(TYPE_ERROR_RESPONSE_NOT_DICT_MSG.format(
+        raise TypeError(TYPE_ERROR_RESPONSE_NOT_DICT.format(
             type_response=type(response)
         ))
     if 'homeworks' not in response:
-        raise KeyError(KEY_ERROR_HOMEWORKS_MISSING_MSG)
+        raise KeyError(KEY_ERROR_HOMEWORKS_MISSING)
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
-        raise TypeError(TYPE_ERROR_HOMEWORKS_NOT_LIST_MSG.format(
+        raise TypeError(TYPE_ERROR_HOMEWORKS_NOT_LIST.format(
             type_homeworks=type(homeworks)
         ))
     return homeworks
@@ -178,11 +168,11 @@ def parse_status(homework):
         'status',
     ]:
         if key not in homework:
-            raise KeyError(KEY_ERROR_DATA_HOMEWORK_MISSING_MSG.format(key=key))
+            raise KeyError(KEY_ERROR_DATA_HOMEWORK_MISSING.format(key=key))
     status = homework['status']
     if status not in HOMEWORK_VERDICTS:
-        raise ValueError(VALUE_ERROR_UNKNOWN_STATUS_MSG.format(status=status))
-    return STATUS_CHANGED_HOMEWORK_MSG.format(
+        raise ValueError(VALUE_ERROR_UNKNOWN_STATUS.format(status=status))
+    return STATUS_CHANGED_HOMEWORK.format(
         homework_name=homework['homework_name'],
         verdict=HOMEWORK_VERDICTS[status]
     )
@@ -190,8 +180,7 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
-    if not check_tokens():
-        return
+    check_tokens()
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     last_error_message = None
@@ -200,12 +189,11 @@ def main():
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
             if homeworks and send_message(bot, parse_status(homeworks[0])):
-                if 'current_date' in response:
-                    timestamp = response['current_date']
+                timestamp = response.get('current_date', int(time.time()))
             else:
-                logger.debug(NO_NEW_STATUSES_MSG)
+                logger.debug(NO_NEW_STATUSES)
         except Exception as error:
-            message = PROGRAM_FAILURE_MSG.format(error=error)
+            message = PROGRAM_FAILURE.format(error=error)
             logger.error(message)
             if message != last_error_message and send_message(bot, message):
                 last_error_message = message
@@ -216,8 +204,8 @@ def main():
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
-        format=('%(asctime)s [%(levelname)s] %(message)s — %(filename)s: '
-                '%(lineno)d в функции %(funcName)s'
+        format=('%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d '
+                'в функции %(funcName)s — %(message)s'
                 ),
         handlers=[
             logging.StreamHandler(sys.stdout),
