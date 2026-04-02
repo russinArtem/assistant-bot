@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from telebot import TeleBot
 import requests
 
+from exceptions import APIDataError, APIHttpError
+
 
 load_dotenv()
 
@@ -36,7 +38,7 @@ ERROR_SUCCESS_MESSAGE = (
     'Ошибка при отправке сообщения "{message}": {error}'
 )
 API_ERROR_COMMON = (
-    'URL: {endpoint}. '
+    'URL: {url}. '
     'Заголовки: {headers}. '
     'Параметры запроса: {params}.'
 )
@@ -106,29 +108,27 @@ def get_api_answer(timestamp):
     В случае успешного запроса должна вернуть ответ API,
     приведя его из формата JSON к типам данных Python.
     """
-    params = {'from_date': timestamp}
-    api_error_common = API_ERROR_COMMON.format(
-        endpoint=ENDPOINT, headers=HEADERS, params=params
-    )
+    api_params = {
+        'url': ENDPOINT,
+        'headers': HEADERS,
+        'params': {'from_date': timestamp}
+    }
+    api_error_common = API_ERROR_COMMON.format(**api_params)
     try:
-        response = requests.get(
-            ENDPOINT,
-            headers=HEADERS,
-            params=params
-        )
+        response = requests.get(**api_params)
     except requests.RequestException as error:
         raise ConnectionError(API_REQUEST_ERROR.format(
             error=error, api_error_common=api_error_common
         ))
     status_code = response.status_code
     if status_code != OK:
-        raise requests.HTTPError(API_STATUS_ERROR.format(
+        raise APIHttpError(API_STATUS_ERROR.format(
             status_code=status_code, api_error_common=api_error_common
         ))
     data = response.json()
     for key in ['code', 'error']:
         if key in data:
-            raise ValueError(API_DATA_ERROR.format(
+            raise APIDataError(API_DATA_ERROR.format(
                 key=key,
                 error=data[key],
                 api_error_common=api_error_common
