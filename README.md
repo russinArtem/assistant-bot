@@ -6,13 +6,22 @@
 
 ## Стек технологий
 
-- **Бэкенд:** Python 3.12;
-- **Библиотеки:**
-  - **pyTelegramBotAPI** - для работы с Telegram Bot API;
-  - **requests** - для взаимодействия с API Яндекс Практикума;
-  - **python-dotenv** - для управления переменными окружения.
-- **Логирование:** logging;
-- **Инструменты:** Git, GitHub, pytest, flake8.
+**Бэкенд:**
+![Python](https://img.shields.io/badge/Python_3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+
+**Библиотеки:**
+![pyTelegramBotAPI](https://img.shields.io/badge/pyTelegramBotAPI-26A5E4?style=flat-square&logo=telegram&logoColor=white)
+![requests](https://img.shields.io/badge/requests-3776AB?style=flat-square&logo=python&logoColor=white)
+![python-dotenv](https://img.shields.io/badge/python--dotenv-ECD53F?style=flat-square&logo=python&logoColor=black)
+
+**Логирование:**
+![logging](https://img.shields.io/badge/logging-3776AB?style=flat-square&logo=python&logoColor=white)
+
+**Инструменты:**
+![Git](https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white)
+![pytest](https://img.shields.io/badge/pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white)
+![flake8](https://img.shields.io/badge/flake8-3776AB?style=flat-square&logo=python&logoColor=white)
 
 ---
 
